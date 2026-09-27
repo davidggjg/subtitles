@@ -59,12 +59,16 @@ class PlaybackState {
     var positionMs by mutableStateOf(0L)
     var durationMs by mutableStateOf(0L)
     var playing by mutableStateOf(false)
+    /** הודעה כשהנגן לא מצליח לפתוח את הקובץ; הצריבה עצמה עדיין אפשרית. */
+    var error by mutableStateOf<String?>(null)
     internal var view: VideoView? = null
 
     fun togglePlay() {
         val player = view ?: return
-        if (playing) player.pause() else player.start()
-        playing = !playing
+        runCatching {
+            if (playing) player.pause() else player.start()
+            playing = !playing
+        }
     }
 
     fun pause() {
@@ -75,7 +79,7 @@ class PlaybackState {
     fun seekTo(ms: Long) {
         val clamped = ms.coerceIn(0L, durationMs.coerceAtLeast(0L))
         positionMs = clamped
-        view?.seekTo(clamped.toInt())
+        runCatching { view?.seekTo(clamped.toInt()) }
     }
 
     fun nudge(deltaMs: Long) = seekTo(positionMs + deltaMs)
@@ -121,9 +125,17 @@ fun VideoStage(
                     VideoView(context).apply {
                         setOnPreparedListener { media ->
                             media.isLooping = false
-                            playback.durationMs = media.duration.toLong().coerceAtLeast(0L)
+                            playback.error = null
+                            val reported = media.duration.toLong()
+                            if (reported > 0) playback.durationMs = reported
                         }
                         setOnCompletionListener { playback.playing = false }
+                        // בלי מאזין שגיאות אנדרואיד פותח חלון שגיאה משלו.
+                        setOnErrorListener { _, _, _ ->
+                            playback.playing = false
+                            playback.error = "לא הצלחתי לנגן את הקובץ הזה בתצוגה המקדימה, אבל אפשר לצרוב אותו"
+                            true
+                        }
                     }
                 },
                 update = { view ->
@@ -149,6 +161,21 @@ fun VideoStage(
                 }
             }
             SubtitleOverlay(activeCue, style)
+        }
+
+        playback.error?.let { message ->
+            Text(
+                message,
+                color = Amber,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
         }
 
         if (uri != null) {

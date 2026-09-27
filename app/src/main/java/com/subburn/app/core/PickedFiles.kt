@@ -65,7 +65,11 @@ object PickedFiles {
     private fun sanitize(name: String) = name.replace(Regex("[^\\w.\\-]+"), "_")
 
     private fun queryNameAndSize(context: Context, uri: Uri, fallback: String): Pair<String, Long> {
-        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        // ספק תוכן של צד שלישי עלול לזרוק במקום להחזיר עמודות — השם הוא פרט
+        // תצוגה בלבד, ולא סיבה להפיל את הבחירה.
+        runCatching {
+            context.contentResolver.query(uri, null, null, null, null)
+        }.getOrNull()?.use { cursor ->
             if (cursor.moveToFirst()) {
                 val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)

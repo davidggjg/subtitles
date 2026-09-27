@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
             video = picked
             playback.durationMs = picked?.durationMs ?: 0L
             playback.positionMs = 0L
+            playback.error = null
         }
         val subtitlePicker = rememberOpenDocument { uri ->
             val picked = runCatching { PickedFiles.readSubtitle(this, uri) }

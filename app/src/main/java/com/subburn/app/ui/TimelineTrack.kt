@@ -2,18 +2,20 @@ package com.subburn.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -32,16 +34,21 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.subburn.app.core.Cue
+import com.subburn.app.core.TimelineMath
 import com.subburn.app.core.asClock
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** כמה מקום על המסך תופסת שנייה אחת של וידאו. */
 private val SECOND_WIDTH = 46.dp
+
+// אורכי המקטעים והחישובים עצמם יושבים ב־TimelineMath, כדי שיהיו בדוקים.
+private const val CHUNK_SECONDS = TimelineMath.CHUNK_SECONDS
+private const val CHUNK_MS = TimelineMath.CHUNK_MS
 
 /**
  * פס הזמן: גוללים אותו ימינה ושמאלה, והקו הקבוע במרכז הוא המקום שמתנגן.
@@ -57,48 +64,57 @@ fun TimelineTrack(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val scroll = rememberScrollState()
-    val pxPerMs = remember(density) { with(density) { SECOND_WIDTH.toPx() } / 1000f }
-    // פס הזמן תמיד רץ משמאל לימין, כמו בכל עורך וידאו, גם בממשק עברי.
+    val listState = rememberLazyListState()
+    val pxPerMs = with(density) { SECOND_WIDTH.toPx() } / 1000f
+    val chunkPx = TimelineMath.chunkWidthPx(with(density) { SECOND_WIDTH.toPx() })
+    val chunkCount = remember(playback.durationMs) { TimelineMath.chunkCount(playback.durationMs) }
+
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val halfWidth = maxWidth / 2
-        val trackWidth = with(density) { (playback.durationMs * pxPerMs).toDp() }
 
         // גרירה של הפס = הזזת מקום הנגינה.
-        LaunchedEffect(scroll, pxPerMs) {
-            snapshotFlow { scroll.value to scroll.isScrollInProgress }
+        LaunchedEffect(listState, pxPerMs, enabled) {
+            snapshotFlow {
+                Triple(
+                    listState.firstVisibleItemIndex,
+                    listState.firstVisibleItemScrollOffset,
+                    listState.isScrollInProgress
+                )
+            }
                 .distinctUntilChanged()
-                .collect { (value, dragging) ->
+                .collect { (index, offset, dragging) ->
                     if (dragging && enabled) {
                         playback.pause()
-                        playback.seekTo((value / pxPerMs).toLong())
+                        playback.seekTo(TimelineMath.positionMs(index, offset, chunkPx, pxPerMs))
                     }
                 }
         }
         // בזמן נגינה הפס זז לבד מתחת לקו.
         LaunchedEffect(playback.positionMs, playback.playing) {
-            if (playback.playing && !scroll.isScrollInProgress) {
-                scroll.scrollTo((playback.positionMs * pxPerMs).toInt())
+            if (playback.playing && !listState.isScrollInProgress) {
+                val scrolled = TimelineMath.scrollPx(playback.positionMs, pxPerMs)
+                listState.scrollToItem(
+                    (scrolled / chunkPx).toInt(),
+                    (scrolled % chunkPx).toInt()
+                )
             }
         }
 
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(scroll)
+            LazyRow(
+                state = listState,
+                userScrollEnabled = enabled,
+                // ריפוד בחצי מסך משני הצדדים, כדי שההתחלה והסוף יגיעו עד הקו שבמרכז.
+                contentPadding = PaddingValues(horizontal = halfWidth),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row {
-                    Spacer(Modifier.width(halfWidth))
-                    Column(
-                        Modifier.width(trackWidth.coerceAtLeast(1.dp)),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        SubtitleLane(cues, pxPerMs, enabled, onCueClick, onAddCue)
-                        FilmLane(playback.durationMs)
-                        Ruler(playback.durationMs)
-                    }
-                    Spacer(Modifier.width(halfWidth))
+                items(chunkCount) { chunk ->
+                    TimelineChunk(
+                        chunkIndex = chunk,
+                        cues = cues,
+                        enabled = enabled,
+                        onCueClick = onCueClick
+                    )
                 }
             }
         }
@@ -108,110 +124,102 @@ fun TimelineTrack(
             Modifier
                 .align(Alignment.TopCenter)
                 .width(2.dp)
-                .height(112.dp)
+                .height(104.dp)
                 .background(Neon)
         )
-    }
-}
 
-/** מסלול הכתוביות — כל כתובית מלבן במקום שלה. */
-@Composable
-private fun SubtitleLane(
-    cues: List<Cue>,
-    pxPerMs: Float,
-    enabled: Boolean,
-    onCueClick: (Int) -> Unit,
-    onAddCue: () -> Unit
-) {
-    val density = LocalDensity.current
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(PanelHigh.copy(alpha = 0.5f))
-    ) {
-        if (cues.isEmpty()) {
+        if (cues.isEmpty() && playback.durationMs > 0) {
             Row(
                 Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(horizontal = 10.dp)
-                    .clickable(enabled = enabled, onClick = onAddCue),
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Panel.copy(alpha = 0.85f))
+                    .clickable(enabled = enabled, onClick = onAddCue)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null, tint = Neon)
                 Spacer(Modifier.width(6.dp))
-                Text("הוספת כתובית", color = TextDim, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-        cues.forEachIndexed { index, cue ->
-            val start = with(density) { (cue.startMs * pxPerMs).toDp() }
-            val width = with(density) { (cue.durationMs * pxPerMs).toDp() }
-            Box(
-                Modifier
-                    .padding(start = start, top = 4.dp, bottom = 4.dp)
-                    .width(width.coerceAtLeast(18.dp))
-                    .height(36.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(Violet.copy(alpha = 0.35f))
-                    .clickable(enabled = enabled) { onCueClick(index) }
-                    .padding(horizontal = 6.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Text(
-                    cue.text.replace('\n', ' '),
-                    color = TextHigh,
-                    fontSize = 11.sp,
-                    maxLines = 2
-                )
+                Text("הוספת כתובית", color = TextHigh, style = MaterialTheme.typography.labelSmall)
             }
         }
     }
 }
 
-/** רצועת הווידאו — פס דקורטיבי שנותן תחושת אורך לסרט. */
+/** מקטע אחד של עשר שניות: רצועת כתוביות, רצועת וידאו וסרגל זמן. */
 @Composable
-private fun FilmLane(durationMs: Long) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(34.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                Brush.horizontalGradient(
-                    listOf(Color(0xFF16203A), Color(0xFF23304F), Color(0xFF16203A))
-                )
-            ),
-        contentAlignment = Alignment.CenterStart
+private fun TimelineChunk(
+    chunkIndex: Int,
+    cues: List<Cue>,
+    enabled: Boolean,
+    onCueClick: (Int) -> Unit
+) {
+    val density = LocalDensity.current
+    val chunkStart = chunkIndex * CHUNK_MS
+    val chunkEnd = chunkStart + CHUNK_MS
+    val width = SECOND_WIDTH * CHUNK_SECONDS
+
+    Column(
+        Modifier.width(width),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(
-            "  ${durationMs.asClock()}",
-            color = TextDim,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-/** סרגל שניות מתחת לרצועות. */
-@Composable
-private fun Ruler(durationMs: Long) {
-    val totalSeconds = (durationMs / 1000).toInt()
-    val step = when {
-        totalSeconds > 3600 -> 60
-        totalSeconds > 600 -> 30
-        else -> 5
-    }
-    Box(Modifier.fillMaxWidth().height(16.dp)) {
-        var second = 0
-        while (second <= totalSeconds) {
-            Text(
-                (second * 1000L).asClock(),
-                color = TextDim,
-                fontSize = 9.sp,
-                modifier = Modifier.padding(start = SECOND_WIDTH * second)
-            )
-            second += step
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(PanelHigh.copy(alpha = 0.5f))
+        ) {
+            // כל כתובית מצוירת בכל מקטע שהיא חוצה, כדי שלא תיעלם בגלילה.
+            cues.forEachIndexed { index, cue ->
+                if (cue.endMs < chunkStart || cue.startMs > chunkEnd) return@forEachIndexed
+                val offsetDp = with(density) {
+                    ((cue.startMs - chunkStart) * (SECOND_WIDTH.toPx() / 1000f)).toDp()
+                }
+                val cueWidth = with(density) {
+                    (cue.durationMs * (SECOND_WIDTH.toPx() / 1000f)).toDp()
+                }
+                Box(
+                    Modifier
+                        .offset(x = offsetDp)
+                        .padding(vertical = 4.dp)
+                        .width(cueWidth.coerceIn(18.dp, SECOND_WIDTH * 60))
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(CueBlock)
+                        .clickable(enabled = enabled) { onCueClick(index) }
+                        .padding(horizontal = 6.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (cue.startMs >= chunkStart) {
+                        Text(
+                            cue.text.replace('\n', ' '),
+                            color = TextHigh,
+                            fontSize = 11.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
         }
+
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(30.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(
+                    Brush.horizontalGradient(listOf(Color(0xFF16203A), Color(0xFF23304F)))
+                )
+        )
+
+        Text(
+            chunkStart.asClock(),
+            color = TextDim,
+            fontSize = 9.sp,
+            modifier = Modifier.padding(start = 2.dp)
+        )
     }
 }

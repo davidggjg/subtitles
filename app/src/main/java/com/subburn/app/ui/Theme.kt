@@ -17,6 +17,8 @@ val Neon = Color(0xFF38F2E6)
 val Violet = Color(0xFFA56BFF)
 val Amber = Color(0xFFFFC46B)
 val Danger = Color(0xFFFF5D73)
+/** צבע אטום למלבני הכתוביות — מלבן אחד עשוי להיחתך בין שני מקטעים. */
+val CueBlock = Color(0xFF3B2B63)
 val TextHigh = Color(0xFFE9F0FF)
 val TextDim = Color(0xFF8A97B8)
 
