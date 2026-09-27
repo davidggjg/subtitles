@@ -15,11 +15,27 @@ android {
         versionCode = 1
         versionName = "1.0"
         // FFmpegKit ships large native libs; keep only the common ABIs.
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        // x86_64 keeps emulators and ChromeOS working; x86 is dropped as dead weight.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+    }
+
+    // Release signing comes from env vars so CI can sign with a secret keystore;
+    // without them the release build falls back to the debug signing config.
+    val keystorePath = System.getenv("SUBBURN_KEYSTORE")
+    signingConfigs {
+        if (!keystorePath.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("SUBBURN_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SUBBURN_KEY_ALIAS")
+                keyPassword = System.getenv("SUBBURN_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -31,7 +47,25 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
+    // Per-ABI APKs (~35 MB each) plus one universal APK, since the bundled
+    // FFmpeg native libs dominate the download size.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
     buildFeatures { compose = true }
+
+    lint {
+        abortOnError = true
+        checkDependencies = true
+        // Dependency-upgrade nags would break CI on a schedule nobody controls.
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable")
+    }
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -56,9 +90,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // FFmpeg with libx265 + libass (subtitles filter) => GPL build.
-    // The original com.arthenica artifacts were retired, so this uses the
-    // republished full-gpl fork. Swap for any other build that exposes the
-    // same com.arthenica.ffmpegkit API if you mirror the binaries yourself.
-    implementation("com.antonkarpenko:ffmpeg-kit-full-gpl:6.0.2")
+    // FFmpeg 8.1.1 full-gpl: libass (the `subtitles` filter) + libx265.
+    // The original com.arthenica:ffmpeg-kit-* AARs were pulled from Maven
+    // Central; this is the maintained republished build (same API, package
+    // renamed to com.antonkarpenko.ffmpegkit). minSdk of the AAR is 24.
+    implementation("com.antonkarpenko:ffmpeg-kit-full-gpl:2.2.1")
 }

@@ -8,12 +8,15 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.content.pm.PackageManager
 import androidx.core.app.NotificationCompat
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.FFmpegSession
-import com.arthenica.ffmpegkit.Level
-import com.arthenica.ffmpegkit.ReturnCode
-import com.arthenica.ffmpegkit.Statistics
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import com.antonkarpenko.ffmpegkit.FFmpegKit
+import com.antonkarpenko.ffmpegkit.FFmpegSession
+import com.antonkarpenko.ffmpegkit.Level
+import com.antonkarpenko.ffmpegkit.ReturnCode
+import com.antonkarpenko.ffmpegkit.Statistics
 import com.subburn.app.MainActivity
 import com.subburn.app.R
 import com.subburn.app.SubBurnApp
@@ -179,7 +182,14 @@ class BurnService : Service() {
         val now = System.currentTimeMillis()
         if (now - lastNotificationAt < 1000) return
         lastNotificationAt = now
-        val manager = androidx.core.app.NotificationManagerCompat.from(this)
+        // On API 33+ the user can deny notifications; the encode still runs, it
+        // just stops reporting progress in the shade.
+        val allowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        if (!allowed) return
+        val manager = NotificationManagerCompat.from(this)
         runCatching { manager.notify(NOTIFICATION_ID, buildNotification(progress, text)) }
     }
 

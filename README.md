@@ -45,15 +45,59 @@ the exact command line is shown in the app (tap **Show ffmpeg command**).
 | `ui/BurnScreen.kt` | the Compose UI |
 | `ui/Theme.kt` | dark neon Material 3 theme |
 
-## Building
+## Building the APK on GitHub
+
+`.github/workflows/android.yml` builds the APK on GitHub's own runners — no
+Android Studio, no local SDK. It runs on every push, on pull requests, and
+manually from **Actions → Build APK → Run workflow**.
+
+What it does: JDK 17 → `android-actions/setup-android` → `lintDebug` →
+`assembleDebug` → (release, if a keystore secret is set) → uploads the APKs as
+the **SubBurn-apk** artifact (downloadable from the run page for 30 days).
+Pushing a `v*` tag additionally attaches the APKs to a GitHub Release.
+
+### Installable (signed) release APKs
+
+An unsigned release APK cannot be installed, so release builds only run when a
+keystore is configured. Create one and add four repository secrets
+(*Settings → Secrets and variables → Actions*):
+
+```
+keytool -genkeypair -v -keystore release.jks -alias subburn \
+  -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 release.jks     # paste as KEYSTORE_BASE64
+```
+
+| Secret | Value |
+| --- | --- |
+| `KEYSTORE_BASE64` | base64 of `release.jks` |
+| `KEYSTORE_PASSWORD` | keystore password |
+| `KEY_ALIAS` | `subburn` |
+| `KEY_PASSWORD` | key password |
+
+Without them the debug APK is still built and uploaded — debug APKs are signed
+with the standard debug key and install fine for personal use.
+
+### Output sizes
+
+The bundled FFmpeg native libraries are most of the download, so the build is
+split per ABI:
+
+| APK | Size |
+| --- | --- |
+| `arm64-v8a` (nearly every modern phone) | ~31 MB |
+| `armeabi-v7a` (older 32-bit devices) | ~50 MB |
+| `x86_64` (emulator / ChromeOS) | ~32 MB |
+| `universal` (all three) | ~93 MB |
+
+### Building locally
 
 ```
 ./gradlew :app:assembleDebug
 ```
 
-Requires the Android SDK (compileSdk 35, JDK 17); minSdk 24. This repo has no
-Gradle wrapper jar committed — run `gradle wrapper` once, or open the project in
-Android Studio.
+Android SDK with compileSdk 35 and JDK 17; minSdk 24. The Gradle wrapper is
+committed, so no separate Gradle install is needed.
 
 ### FFmpeg dependency note
 
