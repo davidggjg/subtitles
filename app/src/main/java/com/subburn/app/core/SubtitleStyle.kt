@@ -26,7 +26,9 @@ data class SubtitleStyle(
     val italic: Boolean = false,
     /** ריכוך הקצוות של המסגרת והצל (libass Blur), 0 = קצה חד. */
     val blur: Float = 0f,
-    val marginV: Int = DEFAULT_MARGIN
+    val marginV: Int = DEFAULT_MARGIN,
+    /** שוליים מהצדדים — מונעים משורה ארוכה להידבק לקצה המסך. */
+    val marginH: Int = DEFAULT_MARGIN_H
 ) {
     /** &HAABBGGRR — צבעי ASS הם BGR עם בייט אלפא הפוך. */
     private fun assColour(rgb: Int, opacityPercent: Int): String {
@@ -51,10 +53,17 @@ data class SubtitleStyle(
         if (italic) add("Italic=1")
         if (blur > 0f) add("Blur=${trim(blur)}")
         if (marginV != DEFAULT_MARGIN) add("MarginV=$marginV")
+        if (marginH != DEFAULT_MARGIN_H) {
+            add("MarginL=$marginH")
+            add("MarginR=$marginH")
+        }
     }.joinToString(",")
 
     companion object {
         const val DEFAULT_MARGIN = 24
+
+        /** כברירת המחדל של ffmpeg עצמו, כדי שהפקודה תישאר זהה למקור. */
+        const val DEFAULT_MARGIN_H = 10
     }
 
     private fun trim(v: Float): String =

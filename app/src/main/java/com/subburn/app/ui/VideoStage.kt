@@ -40,8 +40,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -214,41 +218,64 @@ private fun rememberHebrewFont(): FontFamily {
     }
 }
 
-/** הכתובית מעל הווידאו, מצוירת לפי אותם פרמטרים שנשלחים ל־ffmpeg. */
+/**
+ * הכתובית מעל הווידאו. הקו השחור מצויר באמת (טקסט במילוי קווי מאחור ולבן
+ * מלפנים), ולא כצל מטושטש, כדי שמה שנראה כאן יהיה מה שייצרב בפועל.
+ */
 @Composable
 private fun SubtitleOverlay(cue: Cue?, style: SubtitleStyle) {
     if (cue == null) return
     val hebrewFont = rememberHebrewFont()
-    Box(
-        Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomCenter
-    ) {
+    val density = LocalDensity.current
+    val fontSize = (style.fontSize * 0.8f).coerceIn(12f, 34f)
+    val outlinePx = with(density) { (style.outline * 1.6f).dp.toPx() }
+    val shadowPx = style.shadow.coerceAtMost(3f) * 1.4f
+
+    val base = TextStyle(
+        fontFamily = hebrewFont,
+        fontSize = fontSize.sp,
+        fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
+        fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
+        textAlign = TextAlign.Center,
+        lineHeight = (fontSize * 1.25f).sp
+    )
+
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         val boxed = style.background == BackgroundMode.BOX
         Box(
             Modifier
-                .padding(bottom = (style.marginV / 4).coerceIn(6, 56).dp, start = 12.dp, end = 12.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .padding(
+                    bottom = (style.marginV / 4).coerceIn(6, 56).dp,
+                    start = (style.marginH / 2).coerceIn(6, 60).dp,
+                    end = (style.marginH / 2).coerceIn(6, 60).dp
+                )
+                .clip(RoundedCornerShape(4.dp))
                 .background(
                     if (boxed) Color.Black.copy(alpha = style.backgroundOpacity / 100f) else Color.Transparent
                 )
-                .padding(horizontal = 8.dp, vertical = 3.dp)
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                cue.text,
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                style = TextStyle(
-                    fontFamily = hebrewFont,
-                    fontSize = (style.fontSize * 0.8f).coerceIn(12f, 34f).sp,
-                    fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
-                    fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
-                    shadow = Shadow(
-                        color = Color.Black,
-                        offset = Offset(style.shadow.coerceAtMost(3f), style.shadow.coerceAtMost(3f)),
-                        blurRadius = 1.5f + style.outline * 2.5f + style.blur * 2f
+            val text = cue.text
+            if (!boxed && outlinePx > 0f) {
+                Text(
+                    text,
+                    color = Color.Black,
+                    style = base.copy(
+                        drawStyle = Stroke(
+                            width = outlinePx,
+                            join = StrokeJoin.Round,
+                            cap = StrokeCap.Round
+                        ),
+                        shadow = if (shadowPx > 0f) {
+                            Shadow(Color.Black.copy(alpha = 0.85f), Offset(shadowPx, shadowPx), style.blur * 3f + 1f)
+                        } else {
+                            null
+                        }
                     )
                 )
-            )
+            }
+            Text(text, color = Color.White, style = base)
         }
     }
 }

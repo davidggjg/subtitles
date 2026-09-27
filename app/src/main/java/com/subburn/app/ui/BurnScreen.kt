@@ -76,7 +76,7 @@ import kotlin.math.roundToInt
 
 /** ההגדרות שנשלחות לצריבה. */
 data class BurnSettings(
-    val style: SubtitleStyle = SubtitleStyle(),
+    val style: SubtitleStyle = StylePreset.BOLD_WHITE.apply(SubtitleStyle()),
     val quality: QualityPreset = QualityPreset.RECOMMENDED,
     val fontsDir: String = ""
 ) {
@@ -98,22 +98,28 @@ enum class QualityPreset(
 
 /** סגנונות מוכנים; ההגדרות המדויקות נשארות מתחת ל"מתקדם". */
 enum class StylePreset(val label: String, val hint: String) {
-    CLASSIC("קלאסי", "קו שחור דק סביב האותיות"),
-    BOXED("רקע מלא", "מלבן שחור מאחורי הטקסט"),
-    CINEMA("קולנועי", "הטיה באלכסון עם שחור רך");
+    BOLD_WHITE("בולט", "לבן עבה עם שחור חזק סביב — קריא על כל רקע"),
+    CLASSIC("עדין", "קו שחור דק, בדיוק כמו הפקודה המקורית"),
+    BOXED("רקע מלא", "מלבן שחור מאחורי הטקסט");
 
     fun apply(style: SubtitleStyle): SubtitleStyle = when (this) {
+        BOLD_WHITE -> style.copy(
+            background = BackgroundMode.OUTLINE,
+            fontSize = 22, bold = true, italic = false,
+            outline = 2.2f, shadow = 0.8f, blur = 0.3f,
+            marginV = 28, marginH = 24
+        )
         CLASSIC -> style.copy(
             background = BackgroundMode.OUTLINE,
-            outline = 1.5f, shadow = 0.5f, blur = 0f, italic = false
+            fontSize = 20, bold = false, italic = false,
+            outline = 1.5f, shadow = 0.5f, blur = 0f,
+            marginV = SubtitleStyle.DEFAULT_MARGIN, marginH = SubtitleStyle.DEFAULT_MARGIN_H
         )
         BOXED -> style.copy(
             background = BackgroundMode.BOX,
-            backgroundOpacity = 65, outline = 1f, shadow = 0f, blur = 0f, italic = false
-        )
-        CINEMA -> style.copy(
-            background = BackgroundMode.OUTLINE,
-            outline = 2f, shadow = 1f, blur = 1f, italic = true
+            backgroundOpacity = 65, bold = false, italic = false,
+            outline = 1f, shadow = 0f, blur = 0f,
+            marginH = 24
         )
     }
 
@@ -587,6 +593,15 @@ private fun ColumnScope.StyleControls(
                 display = if (style.blur == 0f) "כבוי" else "%.1f".format(style.blur),
                 enabled = enabled
             ) { onChange(settings.copy(style = style.copy(blur = round1(it)))) }
+            Tuner(
+                title = "שוליים מהצדדים",
+                hint = "מונע משורה ארוכה להידבק לקצה המסך.",
+                value = style.marginH.toFloat(),
+                range = 0f..80f,
+                steps = 15,
+                display = "${style.marginH}",
+                enabled = enabled
+            ) { onChange(settings.copy(style = style.copy(marginH = it.roundToInt()))) }
             Tuner(
                 title = "מרחק מתחתית המסך",
                 hint = "מרים את הכתוביות מעל שולי המסך.",

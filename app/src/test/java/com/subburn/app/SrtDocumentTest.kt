@@ -111,3 +111,36 @@ class SubtitleStyleTest {
         assertTrue(forced.contains("Bold=1"))
     }
 }
+
+class StylePresetTest {
+
+    @Test
+    fun `the gentle preset still reproduces the original command`() {
+        val style = com.subburn.app.ui.StylePreset.CLASSIC.apply(SubtitleStyle())
+
+        assertEquals(
+            "FontName=Noto Sans Hebrew,FontSize=20,PrimaryColour=&H00FFFFFF," +
+                "OutlineColour=&H00000000,BorderStyle=1,Outline=1.5,Shadow=0.5",
+            style.toForceStyle()
+        )
+    }
+
+    @Test
+    fun `the bold preset thickens the black and keeps the text off the edges`() {
+        val forced = com.subburn.app.ui.StylePreset.BOLD_WHITE.apply(SubtitleStyle()).toForceStyle()
+
+        assertTrue(forced.contains("FontSize=22"))
+        assertTrue(forced.contains("Outline=2.2"))
+        assertTrue(forced.contains("Bold=1"))
+        assertTrue(forced.contains("MarginL=24"))
+        assertTrue(forced.contains("MarginR=24"))
+        assertTrue(forced.contains("BorderStyle=1"))
+    }
+
+    @Test
+    fun `presets round-trip through the preset matcher`() {
+        com.subburn.app.ui.StylePreset.entries.forEach { preset ->
+            assertTrue(preset.matches(preset.apply(SubtitleStyle())))
+        }
+    }
+}
