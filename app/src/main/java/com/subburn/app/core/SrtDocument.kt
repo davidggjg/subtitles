@@ -17,6 +17,9 @@ data class Cue(
  */
 object SrtDocument {
 
+    /** סימן ה־BOM שעורכי כתוביות בווינדוס נוהגים לשתול בתחילת הקובץ. */
+    private const val BOM = "\uFEFF"
+
     private val timeLine = Regex(
         """(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})"""
     )
@@ -40,7 +43,7 @@ object SrtDocument {
 
         // BOM ושורות מספור מסולקות; כל בלוק מסתיים בשורה ריקה.
         file.readLines(Charsets.UTF_8).forEach { raw ->
-            val line = raw.removePrefix("﻿").trimEnd()
+            val line = raw.removePrefix(BOM).trimEnd()
             val match = timeLine.find(line)
             when {
                 match != null -> {

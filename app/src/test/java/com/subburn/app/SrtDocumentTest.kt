@@ -16,8 +16,11 @@ class SrtDocumentTest {
     @get:Rule
     val folder = TemporaryFolder()
 
+    // רצף בריחה ולא התו עצמו, כדי לא לשתול BOM בתוך קובץ המקור.
+    private val bom = "\uFEFF"
+
     private val sample = """
-        ${'﻿'}1
+        ${bom}1
         00:00:01,000 --> 00:00:03,500
         שלום עולם
 
