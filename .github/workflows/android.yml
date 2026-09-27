@@ -34,8 +34,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # `packages` is set explicitly: the action's default list still includes
+      # the long-removed "tools" package, which now fails the whole step.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: false
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
