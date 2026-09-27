@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">SubBurn</string>
-    <string name="channel_name">Rendering</string>
-    <string name="channel_desc">Progress of subtitle burn-in jobs</string>
+    <string name="app_name">צריבת כתוביות</string>
+    <string name="channel_name">התקדמות צריבה</string>
+    <string name="channel_desc">מציג את התקדמות צריבת הכתוביות בווידאו</string>
 </resources>

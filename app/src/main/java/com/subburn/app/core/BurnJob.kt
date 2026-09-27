@@ -23,8 +23,9 @@ object FfmpegCommand {
     private fun escapeFilterPath(path: String): String =
         path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
-    fun build(job: BurnJob): List<String> {
-        val filter = buildString {
+    /** מסנן ה־subtitles עם כל הסגנון — משותף לצריבה ולתצוגה המקדימה. */
+    fun subtitlesFilter(job: BurnJob): String {
+        return buildString {
             append("subtitles=")
             append(escapeFilterPath(job.subtitlePath))
             job.fontsDir?.takeIf { it.isNotBlank() }?.let {
@@ -32,6 +33,10 @@ object FfmpegCommand {
             }
             append(":force_style='").append(job.style.toForceStyle()).append("'")
         }
+    }
+
+    fun build(job: BurnJob): List<String> {
+        val filter = subtitlesFilter(job)
         return listOf(
             "-hide_banner", "-y",
             "-i", job.inputPath,

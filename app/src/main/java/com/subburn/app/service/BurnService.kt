@@ -67,7 +67,7 @@ class BurnService : Service() {
         BurnState.update(
             RenderState.Running(0f, 0.0, 0.0, 0L, -1L, request.displayName)
         )
-        startForeground(NOTIFICATION_ID, buildNotification(0f, "Starting encode…"))
+        startForeground(NOTIFICATION_ID, buildNotification(0f, "מתחיל לקודד…"))
         acquireWakeLock()
 
         session = FFmpegKit.executeWithArgumentsAsync(
@@ -149,10 +149,10 @@ class BurnService : Service() {
 
     private fun formatTicker(speed: Double, etaSeconds: Long): String {
         val speedText = "%.2fx".format(speed)
-        if (etaSeconds < 0) return "Encoding · $speedText"
+        if (etaSeconds < 0) return "בצריבה · $speedText"
         val minutes = etaSeconds / 60
         val seconds = etaSeconds % 60
-        return "Encoding · $speedText · ${minutes}m ${seconds}s left"
+        return "בצריבה · $speedText · נותרו ${minutes}:%02d".format(seconds)
     }
 
     private fun buildNotification(progress: Float, text: String): Notification {
@@ -167,13 +167,13 @@ class BurnService : Service() {
         val indeterminate = progress < 0f
         return NotificationCompat.Builder(this, SubBurnApp.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_burn)
-            .setContentTitle(job?.displayName ?: "Burning subtitles")
+            .setContentTitle(job?.displayName ?: "צריבת כתוביות")
             .setContentText(text)
             .setProgress(100, (progress.coerceAtLeast(0f) * 100).toInt(), indeterminate)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
-            .addAction(0, "Cancel", cancelIntent)
+            .addAction(0, "ביטול", cancelIntent)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
@@ -223,6 +223,8 @@ class BurnService : Service() {
                 shadow = getFloatExtra(EXTRA_SHADOW, 0.5f),
                 backgroundOpacity = getIntExtra(EXTRA_OPACITY, 70),
                 bold = getBooleanExtra(EXTRA_BOLD, false),
+                italic = getBooleanExtra(EXTRA_ITALIC, false),
+                blur = getFloatExtra(EXTRA_BLUR, 0f),
                 marginV = getIntExtra(EXTRA_MARGIN, 24)
             )
         )
@@ -250,6 +252,8 @@ class BurnService : Service() {
         private const val EXTRA_SHADOW = "shadow"
         private const val EXTRA_OPACITY = "opacity"
         private const val EXTRA_BOLD = "bold"
+        private const val EXTRA_ITALIC = "italic"
+        private const val EXTRA_BLUR = "blur"
         private const val EXTRA_MARGIN = "margin"
 
         fun start(context: Context, job: BurnJob) {
@@ -270,6 +274,8 @@ class BurnService : Service() {
                 putExtra(EXTRA_SHADOW, job.style.shadow)
                 putExtra(EXTRA_OPACITY, job.style.backgroundOpacity)
                 putExtra(EXTRA_BOLD, job.style.bold)
+                putExtra(EXTRA_ITALIC, job.style.italic)
+                putExtra(EXTRA_BLUR, job.style.blur)
                 putExtra(EXTRA_MARGIN, job.style.marginV)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

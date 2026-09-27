@@ -18,6 +18,13 @@ the exact command line is shown in the app (tap **Show ffmpeg command**).
 
 ## Features
 
+- **Hebrew, right-to-left UI** — every label, hint and notification is in
+  Hebrew, the layout is forced to RTL, and each section carries a short
+  explanation of what the control actually does.
+- **Toolbar + video timeline with a real preview** — drag the timeline (or use
+  −10s / +10s / 25-50-75% jumps) and the app renders that exact frame with the
+  subtitles burned on it, using the same `subtitles` filter as the final
+  encode. What you see is what you get, before committing to a long render.
 - **File pickers** — SAF `OpenDocument` for the video and the subtitle file.
   The video is handed to ffmpeg as a `saf:` path (no copying a multi-GB file);
   the subtitle is copied into the cache because libass needs a real path.
@@ -26,9 +33,9 @@ the exact command line is shown in the app (tap **Show ffmpeg command**).
   Cancel action. The encode survives screen-off and backgrounding.
 - **Compression** — libx265, CRF slider 16–32 with quality hints, preset
   picker, audio stream-copied so only the video is re-encoded.
-- **Subtitle styling** — font size slider, full box vs. outline-only toggle,
-  box opacity, black outline thickness, drop shadow, bottom margin, bold,
-  font name and optional `fontsdir`, all with a live preview strip.
+- **Subtitle styling** — font size, full box vs. outline-only, box opacity,
+  black outline thickness, drop shadow, edge softening (libass `Blur`),
+  bottom margin, bold, italic slant, font name and an optional `fontsdir`.
 - **Output** — rendered to app storage, then published to `Movies/SubBurn`
   via MediaStore so it appears in the gallery.
 
@@ -38,6 +45,7 @@ the exact command line is shown in the app (tap **Show ffmpeg command**).
 | --- | --- |
 | `core/SubtitleStyle.kt` | style model → ASS `force_style` string (incl. `&HAABBGGRR` colours) |
 | `core/BurnJob.kt` | job model + `FfmpegCommand` builder and shell preview |
+| `core/PreviewRenderer.kt` | single-frame preview via `-ss … -copyts` + the same filter |
 | `core/PickedFiles.kt` | SAF metadata, srt caching, `saf:` input path, output naming |
 | `core/BurnState.kt` | shared `StateFlow` of render progress and log tail |
 | `core/MediaExporter.kt` | MediaStore publish to `Movies/SubBurn` |

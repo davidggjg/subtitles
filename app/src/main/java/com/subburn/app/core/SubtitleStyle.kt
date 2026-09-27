@@ -1,17 +1,17 @@
 package com.subburn.app.core
 
-/** Background treatment applied behind the subtitle text. */
-enum class BackgroundMode(val label: String, val borderStyle: Int) {
-    /** BorderStyle=1 — outlined glyphs with a drop shadow, no box. */
-    OUTLINE("Outline only", 1),
+/** טיפול הרקע מאחורי הכתובית. */
+enum class BackgroundMode(val label: String, val hint: String, val borderStyle: Int) {
+    /** BorderStyle=1 — אותיות עם קו מסגרת וצל, בלי מלבן. */
+    OUTLINE("מסגרת בלבד", "האותיות עטופות בשחור, הרקע נשאר שקוף", 1),
 
-    /** BorderStyle=3 — solid/translucent box drawn behind every line. */
-    BOX("Full box", 3)
+    /** BorderStyle=3 — מלבן אטום/שקוף למחצה מאחורי כל שורה. */
+    BOX("רקע מלא", "מלבן שחור מאחורי הטקסט — קריא גם על רקע בהיר", 3)
 }
 
 /**
- * Everything the libass `force_style` option needs. Values map 1:1 onto ASS
- * style fields, so the string this produces is what ffmpeg understands.
+ * כל מה שנכנס ל־force_style של libass. כל שדה מתורגם אחד־לאחד לשדה סגנון
+ * ASS, כך שהמחרוזת שנוצרת כאן היא בדיוק מה שffmpeg מקבל.
  */
 data class SubtitleStyle(
     val fontName: String = "Noto Sans Hebrew",
@@ -19,12 +19,16 @@ data class SubtitleStyle(
     val background: BackgroundMode = BackgroundMode.OUTLINE,
     val outline: Float = 1.5f,
     val shadow: Float = 0.5f,
-    /** 0..100, how opaque the box or shadow backdrop is. */
+    /** 0..100 — כמה אטום המלבן או הצל שמאחורי הטקסט. */
     val backgroundOpacity: Int = 70,
     val bold: Boolean = false,
+    /** הטיה באלכסון — האותיות נשענות קדימה והשחור סביבן נראה מקצועי יותר. */
+    val italic: Boolean = false,
+    /** ריכוך הקצוות של המסגרת והצל (libass Blur), 0 = קצה חד. */
+    val blur: Float = 0f,
     val marginV: Int = 24
 ) {
-    /** &HAABBGGRR — ASS colours are BGR with an inverted alpha byte. */
+    /** &HAABBGGRR — צבעי ASS הם BGR עם בייט אלפא הפוך. */
     private fun assColour(rgb: Int, opacityPercent: Int): String {
         val alpha = (255 - (opacityPercent.coerceIn(0, 100) * 255 / 100)) and 0xFF
         val r = (rgb shr 16) and 0xFF
@@ -43,6 +47,8 @@ data class SubtitleStyle(
         add("Outline=${trim(outline)}")
         add("Shadow=${trim(shadow)}")
         add("Bold=${if (bold) 1 else 0}")
+        add("Italic=${if (italic) 1 else 0}")
+        if (blur > 0f) add("Blur=${trim(blur)}")
         add("MarginV=$marginV")
     }.joinToString(",")
 
