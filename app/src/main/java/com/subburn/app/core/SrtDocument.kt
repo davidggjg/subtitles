@@ -42,7 +42,7 @@ object SrtDocument {
         }
 
         // BOM ושורות מספור מסולקות; כל בלוק מסתיים בשורה ריקה.
-        file.readLines(Charsets.UTF_8).forEach { raw ->
+        SubtitleText.read(file).lineSequence().forEach { raw ->
             val line = raw.removePrefix(BOM).trimEnd()
             val match = timeLine.find(line)
             when {

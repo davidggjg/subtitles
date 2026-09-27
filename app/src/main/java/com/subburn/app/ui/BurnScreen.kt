@@ -604,14 +604,14 @@ private fun ColumnScope.StyleControls(
             }
             Field(
                 label = "שם הפונט",
-                hint = "פונט שמותקן במערכת, או שנמצא בתיקייה שלמטה.",
+                hint = "פונט עברי מצורף לאפליקציה ומשמש כברירת מחדל. שם אחר יחפש במכשיר או בתיקייה שלמטה.",
                 value = style.fontName,
                 placeholder = "Noto Sans Hebrew",
                 enabled = enabled
             ) { onChange(settings.copy(style = style.copy(fontName = it))) }
             Field(
                 label = "תיקיית פונטים",
-                hint = "לא חובה — נתיב לתיקייה עם קובצי פונט משלך.",
+                hint = "לא חובה — רק אם את רוצה פונט משלך, למשל /storage/emulated/0/fonts",
                 value = settings.fontsDir,
                 placeholder = "/storage/emulated/0/fonts",
                 enabled = enabled

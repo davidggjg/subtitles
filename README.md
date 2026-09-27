@@ -28,6 +28,11 @@ the exact command line is shown in the app (tap **Show ffmpeg command**).
 
 ## Features
 
+- **Hebrew subtitles actually render** — Noto Sans Hebrew (OFL) ships in the
+  APK, is copied to app storage on first launch and registered with fontconfig
+  plus passed as `fontsdir`, because libass finds no font on its own and burns
+  empty boxes otherwise. Subtitle files are decoded as UTF-8 when valid and as
+  windows-1255 when not, so legacy Hebrew SRTs stop turning into gibberish.
 - **Hebrew, right-to-left UI** — every label, hint and notification is in
   Hebrew, the layout is forced to RTL, and each section carries a short
   explanation of what the control actually does.

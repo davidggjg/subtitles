@@ -41,7 +41,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -199,10 +202,23 @@ fun VideoStage(
     }
 }
 
+/** אותו פונט עברי שנצרב לווידאו, כדי שהתצוגה תשקף את התוצאה. */
+@Composable
+private fun rememberHebrewFont(): FontFamily {
+    val assets = LocalContext.current.assets
+    return remember(assets) {
+        FontFamily(
+            Font("fonts/NotoSansHebrew-Regular.ttf", assets, weight = FontWeight.Normal),
+            Font("fonts/NotoSansHebrew-Bold.ttf", assets, weight = FontWeight.Bold)
+        )
+    }
+}
+
 /** הכתובית מעל הווידאו, מצוירת לפי אותם פרמטרים שנשלחים ל־ffmpeg. */
 @Composable
 private fun SubtitleOverlay(cue: Cue?, style: SubtitleStyle) {
     if (cue == null) return
+    val hebrewFont = rememberHebrewFont()
     Box(
         Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter
@@ -222,6 +238,7 @@ private fun SubtitleOverlay(cue: Cue?, style: SubtitleStyle) {
                 color = Color.White,
                 textAlign = TextAlign.Center,
                 style = TextStyle(
+                    fontFamily = hebrewFont,
                     fontSize = (style.fontSize * 0.8f).coerceIn(12f, 34f).sp,
                     fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
                     fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,

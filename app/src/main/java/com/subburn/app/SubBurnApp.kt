@@ -4,11 +4,14 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import com.subburn.app.core.FontLibrary
 
 class SubBurnApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // הפונט העברי חייב להיות על הדיסק לפני הצריבה הראשונה.
+        FontLibrary.configure(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,

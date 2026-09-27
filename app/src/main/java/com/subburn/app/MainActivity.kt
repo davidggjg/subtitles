@@ -26,6 +26,7 @@ import com.subburn.app.core.BurnJob
 import com.subburn.app.core.BurnState
 import com.subburn.app.core.Cue
 import com.subburn.app.core.FfmpegCommand
+import com.subburn.app.core.FontLibrary
 import com.subburn.app.core.PickedFiles
 import com.subburn.app.core.PickedMedia
 import com.subburn.app.core.RenderState
@@ -133,12 +134,15 @@ class MainActivity : ComponentActivity() {
 
     private fun buildJob(video: PickedMedia, srt: File, settings: BurnSettings): BurnJob {
         val output = PickedFiles.outputFile(this, video.displayName)
+        // בלי תיקיית פונטים libass לא מוצא אות עברית אחת, ולכן תמיד נמסרת
+        // תיקייה: זו שהמשתמשת בחרה, או זו שנארזה עם האפליקציה.
+        FontLibrary.configure(this, settings.fontsDir)
         return BurnJob(
             inputPath = PickedFiles.ffmpegInputPath(this, video.uri),
             subtitlePath = srt.absolutePath,
             outputPath = output.absolutePath,
             displayName = output.name,
-            fontsDir = settings.fontsDir.ifBlank { null },
+            fontsDir = settings.fontsDir.ifBlank { FontLibrary.defaultFontsDir(this) },
             crf = settings.crf,
             preset = settings.preset,
             durationMs = video.durationMs,
