@@ -21,10 +21,15 @@ the exact command line is shown in the app (tap **Show ffmpeg command**).
 - **Hebrew, right-to-left UI** — every label, hint and notification is in
   Hebrew, the layout is forced to RTL, and each section carries a short
   explanation of what the control actually does.
-- **Toolbar + video timeline with a real preview** — drag the timeline (or use
-  −10s / +10s / 25-50-75% jumps) and the app renders that exact frame with the
-  subtitles burned on it, using the same `subtitles` filter as the final
-  encode. What you see is what you get, before committing to a long render.
+- **Player, not just a picker** — the video plays in-app with play/pause,
+  ±10s and a scrub bar, and the active subtitle is drawn over the frame in the
+  chosen style, so you see the result while you work.
+- **Subtitle editing** — tap a cue to jump to it, the pencil to fix a word, or
+  "add from here" to create a cue at the playhead; start/end can be taken from
+  the current playback position or nudged in 0.2s steps. The edited cue list is
+  written back out as a clean, renumbered SRT and that file is what gets burned.
+- **Few choices by default** — three style presets (classic / boxed / cinema)
+  and three quality presets; everything else is folded behind "advanced".
 - **File pickers** — SAF `OpenDocument` for the video and the subtitle file.
   The video is handed to ffmpeg as a `saf:` path (no copying a multi-GB file);
   the subtitle is copied into the cache because libass needs a real path.
@@ -45,12 +50,14 @@ the exact command line is shown in the app (tap **Show ffmpeg command**).
 | --- | --- |
 | `core/SubtitleStyle.kt` | style model → ASS `force_style` string (incl. `&HAABBGGRR` colours) |
 | `core/BurnJob.kt` | job model + `FfmpegCommand` builder and shell preview |
-| `core/PreviewRenderer.kt` | single-frame preview via `-ss … -copyts` + the same filter |
+| `core/SrtDocument.kt` | SRT parse/serialize, cue lookup by playback position |
 | `core/PickedFiles.kt` | SAF metadata, srt caching, `saf:` input path, output naming |
 | `core/BurnState.kt` | shared `StateFlow` of render progress and log tail |
 | `core/MediaExporter.kt` | MediaStore publish to `Movies/SubBurn` |
 | `service/BurnService.kt` | foreground service, wake lock, ffmpeg session, notification |
 | `ui/BurnScreen.kt` | the Compose UI |
+| `ui/VideoStage.kt` | player surface, subtitle overlay, transport bar |
+| `ui/SubtitleEditor.kt` | cue list, edit/add/delete dialog |
 | `ui/Theme.kt` | dark neon Material 3 theme |
 
 ## Building the APK on GitHub
@@ -59,7 +66,7 @@ the exact command line is shown in the app (tap **Show ffmpeg command**).
 Android Studio, no local SDK. It runs on every push, on pull requests, and
 manually from **Actions → Build APK → Run workflow**.
 
-What it does: JDK 17 → `android-actions/setup-android` → `lintDebug` →
+What it does: JDK 17 → `android-actions/setup-android` → unit tests → `lintDebug` →
 `assembleDebug` → (release, if a keystore secret is set) → uploads the APKs as
 the **SubBurn-apk** artifact (downloadable from the run page for 30 days).
 Pushing a `v*` tag additionally attaches the APKs to a GitHub Release.

@@ -95,4 +95,6 @@ dependencies {
     // Central; this is the maintained republished build (same API, package
     // renamed to com.antonkarpenko.ffmpegkit). minSdk of the AAR is 24.
     implementation("com.antonkarpenko:ffmpeg-kit-full-gpl:2.2.1")
+
+    testImplementation("junit:junit:4.13.2")
 }
