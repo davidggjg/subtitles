@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,11 +60,20 @@ fun SubtitleEditor(
     cues: List<Cue>,
     positionMs: Long,
     enabled: Boolean,
+    /** כתובית שנבחרה מפס הזמן ויש לפתוח אותה מיד לעריכה. */
+    openIndex: Int? = null,
+    onOpened: () -> Unit = {},
     onSeek: (Long) -> Unit,
     onSave: (index: Int?, cue: Cue) -> Unit,
     onDelete: (index: Int) -> Unit
 ) {
     var draft by remember { mutableStateOf<Draft?>(null) }
+
+    LaunchedEffect(openIndex) {
+        val index = openIndex ?: return@LaunchedEffect
+        cues.getOrNull(index)?.let { draft = Draft(index, it.startMs, it.endMs, it.text) }
+        onOpened()
+    }
     val activeIndex = cues.indexOfLast { positionMs >= it.startMs && positionMs <= it.endMs }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

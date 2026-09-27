@@ -72,22 +72,25 @@ class SrtDocumentTest {
 class SubtitleStyleTest {
 
     @Test
-    fun `force style uses ass bgr colours and an inverted alpha byte`() {
-        val style = SubtitleStyle(backgroundOpacity = 100)
-
-        val forced = style.toForceStyle()
-
-        assertTrue(forced.contains("PrimaryColour=&H00FFFFFF"))
-        assertTrue(forced.contains("OutlineColour=&H00000000"))
-        // 100% אטימות => בייט אלפא 0 בתחביר של ASS.
-        assertTrue(forced.contains("BackColour=&H00000000"))
+    fun `the default style is exactly the hand-written command's force_style`() {
+        assertEquals(
+            "FontName=Noto Sans Hebrew,FontSize=20,PrimaryColour=&H00FFFFFF," +
+                "OutlineColour=&H00000000,BorderStyle=1,Outline=1.5,Shadow=0.5",
+            SubtitleStyle().toForceStyle()
+        )
     }
 
     @Test
-    fun `half transparent box keeps a mid alpha byte`() {
-        val forced = SubtitleStyle(backgroundOpacity = 50).toForceStyle()
+    fun `back colour is emitted only for the boxed background`() {
+        val outlined = SubtitleStyle(backgroundOpacity = 100).toForceStyle()
+        val boxed = SubtitleStyle(
+            background = BackgroundMode.BOX,
+            backgroundOpacity = 50
+        ).toForceStyle()
 
-        assertTrue(forced.contains("BackColour=&H80000000"))
+        assertTrue(!outlined.contains("BackColour="))
+        // 50% אטימות => בייט אלפא באמצע הטווח בתחביר של ASS.
+        assertTrue(boxed.contains("BackColour=&H80000000"))
     }
 
     @Test

@@ -26,7 +26,7 @@ data class SubtitleStyle(
     val italic: Boolean = false,
     /** ריכוך הקצוות של המסגרת והצל (libass Blur), 0 = קצה חד. */
     val blur: Float = 0f,
-    val marginV: Int = 24
+    val marginV: Int = DEFAULT_MARGIN
 ) {
     /** &HAABBGGRR — צבעי ASS הם BGR עם בייט אלפא הפוך. */
     private fun assColour(rgb: Int, opacityPercent: Int): String {
@@ -42,15 +42,20 @@ data class SubtitleStyle(
         add("FontSize=$fontSize")
         add("PrimaryColour=${assColour(0xFFFFFF, 100)}")
         add("OutlineColour=${assColour(0x000000, 100)}")
-        add("BackColour=${assColour(0x000000, backgroundOpacity)}")
+        // BackColour נוגע רק למצב "רקע מלא"; בלעדיו הפקודה נשארת מינימלית.
+        if (background == BackgroundMode.BOX) add("BackColour=${assColour(0x000000, backgroundOpacity)}")
         add("BorderStyle=${background.borderStyle}")
         add("Outline=${trim(outline)}")
         add("Shadow=${trim(shadow)}")
-        add("Bold=${if (bold) 1 else 0}")
-        add("Italic=${if (italic) 1 else 0}")
+        if (bold) add("Bold=1")
+        if (italic) add("Italic=1")
         if (blur > 0f) add("Blur=${trim(blur)}")
-        add("MarginV=$marginV")
+        if (marginV != DEFAULT_MARGIN) add("MarginV=$marginV")
     }.joinToString(",")
+
+    companion object {
+        const val DEFAULT_MARGIN = 24
+    }
 
     private fun trim(v: Float): String =
         if (v == v.toInt().toFloat()) v.toInt().toString() else "%.1f".format(v)

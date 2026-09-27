@@ -24,6 +24,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Terminal
@@ -37,6 +39,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -101,7 +105,7 @@ enum class StylePreset(val label: String, val hint: String) {
     fun apply(style: SubtitleStyle): SubtitleStyle = when (this) {
         CLASSIC -> style.copy(
             background = BackgroundMode.OUTLINE,
-            outline = 1.5f, shadow = 0.5f, blur = 0.4f, italic = false
+            outline = 1.5f, shadow = 0.5f, blur = 0f, italic = false
         )
         BOXED -> style.copy(
             background = BackgroundMode.BOX,
@@ -114,6 +118,14 @@ enum class StylePreset(val label: String, val hint: String) {
     }
 
     fun matches(style: SubtitleStyle): Boolean = apply(style) == style
+}
+
+/** מה פתוח כרגע בחלונית התחתונה. */
+private enum class Sheet(val title: String) {
+    EDIT("עריכת כתוביות"),
+    STYLE("עיצוב הכתוביות"),
+    QUALITY("איכות ודחיסה"),
+    LOG("יומן טכני")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,27 +150,21 @@ fun BurnScreen(
 ) {
     val running = renderState is RenderState.Running
     val activeCue = SrtDocument.cueAt(cues, playback.positionMs)
+    var sheet by remember { mutableStateOf<Sheet?>(null) }
+    var pendingCueIndex by remember { mutableStateOf<Int?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(
         containerColor = Void,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("צריבת כתוביות", color = TextHigh, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "נגן · עריכה · צריבה עם דחיסה",
-                            color = TextDim,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onReset, enabled = !running) {
-                        Icon(Icons.Filled.RestartAlt, contentDescription = "התחלה מחדש", tint = TextDim)
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Panel)
+            TopBar(
+                canBurn = video != null && cues.isNotEmpty() && !running,
+                running = running,
+                onReset = onReset,
+                onBurn = {
+                    playback.pause()
+                    onStart()
+                }
             )
         }
     ) { insets ->
@@ -166,172 +172,309 @@ fun BurnScreen(
             Modifier
                 .fillMaxSize()
                 .padding(insets)
-                .background(Brush.verticalGradient(listOf(Color(0xFF070B16), Void, Color(0xFF0A0717))))
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .background(Brush.verticalGradient(listOf(Color(0xFF070B16), Void)))
         ) {
-            // הנגן ראשון — הוא מה שרואים קודם, כמו בעורכי וידאו.
             VideoStage(
                 uri = video?.uri,
                 activeCue = activeCue,
                 style = settings.style,
-                playback = playback
-            )
-            TransportBar(playback, enabled = video != null && !running)
-
-            FilePickers(
-                videoLabel = video?.displayName,
-                videoDetail = video?.let { "${it.sizeBytes.asReadableSize()}" },
-                subtitleLabel = subtitleName,
-                subtitleDetail = if (cues.isEmpty()) null else "${cues.size} כתוביות",
-                enabled = !running,
-                onPickVideo = onPickVideo,
-                onPickSubtitle = onPickSubtitle
+                playback = playback,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
             )
 
-            Section("עריכת כתוביות", "לוחצים על כתובית כדי לקפוץ אליה, על העיפרון כדי לתקן מילה, או מוסיפים כתובית חדשה מהמקום שבו הווידאו עומד.", Violet) {
-                SubtitleEditor(
+            Column(Modifier.padding(horizontal = 14.dp)) {
+                TransportBar(playback, enabled = video != null && !running)
+            }
+
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                contentAlignment = Alignment.TopStart
+            ) {
+                TimelineTrack(
                     cues = cues,
-                    positionMs = playback.positionMs,
-                    enabled = !running,
-                    onSeek = {
+                    playback = playback,
+                    enabled = video != null && !running,
+                    onCueClick = { index ->
                         playback.pause()
-                        playback.seekTo(it)
+                        playback.seekTo(cues[index].startMs)
+                        pendingCueIndex = index
+                        sheet = Sheet.EDIT
                     },
-                    onSave = onCueSave,
-                    onDelete = onCueDelete
+                    onAddCue = { sheet = Sheet.EDIT }
                 )
             }
 
-            Section("עיצוב", "בוחרים סגנון, וזה מיד נראה על הווידאו למעלה.", Neon) {
-                StyleControls(settings, !running, onSettingsChange)
-            }
+            StatusStrip(renderState, onCancel)
 
-            Section("דחיסה", "הווידאו מקודד מחדש ב־H.265, מה שמקטין את הקובץ משמעותית. הפסקול מועתק כמו שהוא.", Amber) {
-                QualityControls(settings, !running, onSettingsChange)
-            }
-
-            CommandPanel(commandPreview)
-
-            when (renderState) {
-                is RenderState.Running -> ProgressPanel(renderState, onCancel)
-                is RenderState.Done -> StatusPanel(
-                    "הצריבה הושלמה",
-                    listOfNotNull(
-                        renderState.savedTo?.let { "נשמר ב־$it" },
-                        "גודל הקובץ החדש: ${renderState.sizeBytes.asReadableSize()}"
-                    ).joinToString("\n"),
-                    Neon
-                )
-                is RenderState.Failed -> StatusPanel("הצריבה נכשלה", renderState.message, Danger)
-                RenderState.Cancelled -> StatusPanel("בוטל", "לא נשמר קובץ.", Amber)
-                RenderState.Idle -> Unit
-            }
-
-            StartButton(
-                enabled = video != null && cues.isNotEmpty() && !running,
-                running = running,
-                onClick = {
-                    playback.pause()
-                    onStart()
-                }
+            BottomToolbar(
+                hasVideo = video != null,
+                subtitleName = subtitleName,
+                cueCount = cues.size,
+                enabled = !running,
+                hasLog = logLines.isNotEmpty(),
+                onPickVideo = onPickVideo,
+                onPickSubtitle = onPickSubtitle,
+                onOpen = { sheet = it }
             )
+        }
+    }
 
-            if (logLines.isNotEmpty()) LogPanel(logLines)
-            Spacer(Modifier.height(16.dp))
+    val current = sheet
+    if (current != null) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                sheet = null
+                pendingCueIndex = null
+            },
+            sheetState = sheetState,
+            containerColor = Panel,
+            contentColor = TextHigh
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(current.title, color = TextHigh, style = MaterialTheme.typography.titleMedium)
+                when (current) {
+                    Sheet.EDIT -> SubtitleEditor(
+                        cues = cues,
+                        positionMs = playback.positionMs,
+                        enabled = !running,
+                        openIndex = pendingCueIndex,
+                        onOpened = { pendingCueIndex = null },
+                        onSeek = {
+                            playback.pause()
+                            playback.seekTo(it)
+                        },
+                        onSave = onCueSave,
+                        onDelete = onCueDelete
+                    )
+                    Sheet.STYLE -> StyleControls(settings, !running, onSettingsChange)
+                    Sheet.QUALITY -> {
+                        QualityControls(settings, !running, onSettingsChange)
+                        CommandPanel(commandPreview)
+                    }
+                    Sheet.LOG -> LogLines(logLines)
+                }
+            }
         }
     }
 }
 
-/* ---------- קבצים ---------- */
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FilePickers(
-    videoLabel: String?,
-    videoDetail: String?,
-    subtitleLabel: String?,
-    subtitleDetail: String?,
-    enabled: Boolean,
-    onPickVideo: () -> Unit,
-    onPickSubtitle: () -> Unit
+private fun TopBar(
+    canBurn: Boolean,
+    running: Boolean,
+    onReset: () -> Unit,
+    onBurn: () -> Unit
 ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        PickerTile(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Filled.Movie,
-            accent = Neon,
-            title = videoLabel ?: "בחירת וידאו",
-            detail = videoDetail ?: "MKV · MP4 · AVI",
-            enabled = enabled,
-            onClick = onPickVideo
-        )
-        PickerTile(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Filled.ClosedCaption,
-            accent = Violet,
-            title = subtitleLabel ?: "בחירת כתוביות",
-            detail = subtitleDetail ?: "קובץ SRT",
-            enabled = enabled,
-            onClick = onPickSubtitle
-        )
+    CenterAlignedTopAppBar(
+        title = {
+            Text("צריבת כתוביות", color = TextHigh, fontWeight = FontWeight.SemiBold)
+        },
+        navigationIcon = {
+            IconButton(onClick = onReset, enabled = !running) {
+                Icon(Icons.Filled.RestartAlt, contentDescription = "התחלה מחדש", tint = TextDim)
+            }
+        },
+        actions = {
+            Row(
+                Modifier
+                    .padding(end = 10.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(
+                        if (canBurn) Brush.horizontalGradient(listOf(Neon, Violet))
+                        else Brush.horizontalGradient(listOf(PanelHigh, PanelHigh))
+                    )
+                    .clickable(enabled = canBurn, onClick = onBurn)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (running) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        color = Neon,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        Icons.Filled.Bolt,
+                        contentDescription = null,
+                        tint = if (canBurn) Void else TextDim,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (running) "צורבת" else "צריבה",
+                    color = if (canBurn) Void else TextDim,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Panel)
+    )
+}
+
+/** סרגל הכלים התחתון — כל כפתור פותח חלונית, כמו בעורכי וידאו. */
+@Composable
+private fun BottomToolbar(
+    hasVideo: Boolean,
+    subtitleName: String?,
+    cueCount: Int,
+    enabled: Boolean,
+    hasLog: Boolean,
+    onPickVideo: () -> Unit,
+    onPickSubtitle: () -> Unit,
+    onOpen: (Sheet) -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Panel)
+            .padding(vertical = 10.dp, horizontal = 6.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ToolItem(Icons.Filled.Movie, "וידאו", hasVideo, enabled, onPickVideo)
+        ToolItem(Icons.Filled.ClosedCaption, "קובץ כתוביות", subtitleName != null, enabled, onPickSubtitle)
+        ToolItem(Icons.Filled.Edit, if (cueCount > 0) "עריכה ($cueCount)" else "עריכה", cueCount > 0, enabled) {
+            onOpen(Sheet.EDIT)
+        }
+        ToolItem(Icons.Filled.Palette, "עיצוב", false, enabled) { onOpen(Sheet.STYLE) }
+        ToolItem(Icons.Filled.Tune, "איכות", false, enabled) { onOpen(Sheet.QUALITY) }
+        if (hasLog) ToolItem(Icons.Filled.Terminal, "יומן", false, true) { onOpen(Sheet.LOG) }
     }
 }
 
 @Composable
-private fun PickerTile(
-    modifier: Modifier,
+private fun ToolItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    accent: Color,
-    title: String,
-    detail: String,
+    label: String,
+    done: Boolean,
     enabled: Boolean,
     onClick: () -> Unit
 ) {
     Column(
-        modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Panel)
-            .border(1.dp, accent.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+        Modifier
+            .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = accent)
-        Text(title, color = TextHigh, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-        Text(detail, color = TextDim, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = when {
+                !enabled -> TextDim.copy(alpha = 0.4f)
+                done -> Neon
+                else -> TextHigh
+            },
+            modifier = Modifier.size(22.dp)
+        )
+        Text(
+            label,
+            color = if (enabled) TextDim else TextDim.copy(alpha = 0.4f),
+            fontSize = 10.sp,
+            maxLines = 1
+        )
+    }
+}
+
+/** שורת מצב דקה מעל סרגל הכלים: התקדמות, סיום או שגיאה. */
+@Composable
+private fun StatusStrip(state: RenderState, onCancel: () -> Unit) {
+    when (state) {
+        is RenderState.Running -> Column(
+            Modifier
+                .fillMaxWidth()
+                .background(PanelHigh)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (state.progress >= 0f) "בצריבה · ${(state.progress * 100).roundToInt()}%" else "בצריבה",
+                    color = Neon,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "%.2fx · נותרו %s · %s".format(
+                        state.speed,
+                        if (state.etaSeconds < 0) "—" else formatEta(state.etaSeconds),
+                        state.outputSizeBytes.asReadableSize()
+                    ),
+                    color = TextDim,
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "ביטול",
+                    color = Danger,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onCancel)
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
+            LinearProgressIndicator(
+                progress = { state.progress.coerceAtLeast(0f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = Neon,
+                trackColor = Panel
+            )
+        }
+
+        is RenderState.Done -> StatusLine(
+            "הצריבה הושלמה · ${state.sizeBytes.asReadableSize()}" +
+                (state.savedTo?.let { " · נשמר ב־$it" } ?: ""),
+            Neon
+        )
+        is RenderState.Failed -> StatusLine("הצריבה נכשלה: ${state.message}", Danger)
+        RenderState.Cancelled -> StatusLine("הצריבה בוטלה — לא נשמר קובץ", Amber)
+        RenderState.Idle -> Unit
+    }
+}
+
+@Composable
+private fun StatusLine(text: String, accent: Color) {
+    Text(
+        text,
+        color = accent,
+        style = MaterialTheme.typography.labelSmall,
+        maxLines = 2,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PanelHigh)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    )
+}
+
+@Composable
+private fun LogLines(lines: List<String>) {
+    Column(Modifier.fillMaxWidth()) {
+        lines.takeLast(80).forEach {
+            Text(it, color = TextDim, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+        }
     }
 }
 
 /* ---------- מסגרת ---------- */
-
-@Composable
-private fun Section(
-    title: String,
-    explanation: String,
-    accent: Color,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Panel)
-            .border(1.dp, accent.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Text(title, color = TextHigh, style = MaterialTheme.typography.titleMedium)
-        Text(explanation, color = TextDim, style = MaterialTheme.typography.bodyMedium)
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(accent.copy(alpha = 0.12f))
-        )
-        content()
-    }
-}
 
 @Composable
 private fun Panel(accent: Color = Neon, content: @Composable ColumnScope.() -> Unit) {
@@ -541,143 +684,10 @@ private fun CommandPanel(command: String) {
     }
 }
 
-@Composable
-private fun ProgressPanel(state: RenderState.Running, onCancel: () -> Unit) {
-    Panel(Neon) {
-        Text("בצריבה", color = Neon, style = MaterialTheme.typography.labelSmall)
-        Text(state.displayName, color = TextHigh, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-        if (state.progress >= 0f) {
-            LinearProgressIndicator(
-                progress = { state.progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                color = Neon,
-                trackColor = PanelHigh
-            )
-            Text("${(state.progress * 100).roundToInt()}%", color = Neon, style = MaterialTheme.typography.titleMedium)
-        } else {
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                color = Neon,
-                trackColor = PanelHigh
-            )
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Stat("מהירות", "%.2fx".format(state.speed))
-            Stat("פריימים", "%.0f".format(state.fps))
-            Stat("גודל עד כה", state.outputSizeBytes.asReadableSize())
-            Stat("זמן שנותר", if (state.etaSeconds < 0) "—" else formatEta(state.etaSeconds))
-        }
-        OutlinedButton(
-            onClick = onCancel,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger)
-        ) { Text("ביטול הצריבה") }
-        Text(
-            "הצריבה ממשיכה גם כשהמסך כבוי וגם אם יוצאים מהאפליקציה.",
-            style = MaterialTheme.typography.labelSmall,
-            color = TextDim
-        )
-    }
-}
-
 private fun formatEta(seconds: Long): String {
     val m = seconds / 60
     val s = seconds % 60
     return "%d:%02d".format(m, s)
-}
-
-@Composable
-private fun Stat(label: String, value: String) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextDim)
-        Text(value, color = TextHigh, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-@Composable
-private fun StatusPanel(title: String, body: String, accent: Color) {
-    Panel(accent) {
-        Text(title, color = accent, style = MaterialTheme.typography.titleMedium)
-        Text(body, color = TextHigh, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-@Composable
-private fun LogPanel(lines: List<String>) {
-    var expanded by remember { mutableStateOf(false) }
-    Panel(TextDim) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable { expanded = !expanded },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                if (expanded) "הסתרת היומן הטכני" else "הצגת היומן הטכני",
-                color = TextHigh,
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-        AnimatedVisibility(expanded) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 200.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                lines.takeLast(60).forEach {
-                    Text(it, color = TextDim, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StartButton(enabled: Boolean, running: Boolean, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(58.dp),
-        shape = RoundedCornerShape(18.dp),
-        contentPadding = PaddingValues(0.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
-            disabledContainerColor = Color.Transparent
-        )
-    ) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    if (enabled) Brush.horizontalGradient(listOf(Neon, Violet))
-                    else Brush.horizontalGradient(listOf(PanelHigh, PanelHigh))
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (running) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Neon, strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Filled.Bolt, contentDescription = null, tint = if (enabled) Void else TextDim)
-                }
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    if (running) "צורבת…" else "צריבה ושמירה",
-                    color = if (enabled) Void else TextDim,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-    }
 }
 
 /* ---------- פקדים ---------- */

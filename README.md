@@ -6,12 +6,22 @@ the job in a foreground service so it never stalls when the screen goes off.
 
 ## The command it builds
 
+Out of the box the app reproduces the hand-written command it was built
+around — same `force_style`, same `libx265 -preset medium -crf 20`, same
+`-c:a copy`:
+
 ```
 ffmpeg -hide_banner -y -i <input> \
-  -vf "subtitles=<subs.srt>:fontsdir=<fonts>:force_style='FontName=Noto Sans Hebrew,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H4D000000,BorderStyle=1,Outline=1.5,Shadow=0.5,Bold=0,MarginV=24'" \
+  -vf "subtitles=<subs.srt>:fontsdir=<fonts>:force_style='FontName=Noto Sans Hebrew,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1.5,Shadow=0.5'" \
   -c:v libx265 -preset medium -crf 20 -tag:v hvc1 \
   -c:a copy -movflags +faststart <output>.mp4
 ```
+
+Optional style fields (`BackColour`, `Bold`, `Italic`, `Blur`, `MarginV`) are
+only added once you change them, so the default command stays minimal.
+`-tag:v hvc1` and `-movflags +faststart` are the two additions: they make the
+HEVC file play on more players and start without buffering the whole moov
+atom. A unit test pins the default `force_style` string.
 
 Every value in `force_style` plus `-crf` and `-preset` is driven by the UI, and
 the exact command line is shown in the app (tap **Show ffmpeg command**).
@@ -21,6 +31,10 @@ the exact command line is shown in the app (tap **Show ffmpeg command**).
 - **Hebrew, right-to-left UI** — every label, hint and notification is in
   Hebrew, the layout is forced to RTL, and each section carries a short
   explanation of what the control actually does.
+- **Video-editor layout** — video on top, transport row, a scrollable timeline
+  with the subtitle track under a fixed playhead, and an icon toolbar at the
+  bottom (video · subtitle file · edit · style · quality) that opens each panel
+  as a bottom sheet, with the burn button in the app bar.
 - **Player, not just a picker** — the video plays in-app with play/pause,
   ±10s and a scrub bar, and the active subtitle is drawn over the frame in the
   chosen style, so you see the result while you work.
